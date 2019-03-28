@@ -157,6 +157,15 @@ namespace cryptonote
   {
 
   public:
+    enum version
+    {
+      version_0 = 0,
+      version_1,
+      version_2,
+      version_3_per_output_unlock_times,
+      version_4_tx_types,
+    };
+
     // tx information
     size_t   version;
     uint64_t unlock_time;  //number of block (or time), used as a limitation like: spend this tx not early then block/time
@@ -166,17 +175,59 @@ namespace cryptonote
     //extra
     std::vector<uint8_t> extra;
 
+    std::vector<uint64_t> output_unlock_times;
+
+    enum type_t
+    {
+      type_standard,
+      type_deregister,
+      type_key_image_unlock,
+      type_count,
+    };
+
+    union
+    {
+      bool is_deregister; // not used after version >= version_4_tx_types
+      uint16_t type;
+    };
+
     BEGIN_SERIALIZE()
       VARINT_FIELD(version)
-      if(version == 0 || CURRENT_TRANSACTION_VERSION < version) return false;
+      if (version > 2)
+      {
+        FIELD(output_unlock_times)
+        if (version == version_3_per_output_unlock_times)
+          FIELD(is_deregister)
+      }
+      if(version == 0 || version > version_4_tx_types) return false;
       VARINT_FIELD(unlock_time)
       FIELD(vin)
       FIELD(vout)
+      if (version >= 3 && vout.size() != output_unlock_times.size()) return false;
       FIELD(extra)
+      if (version >= version_4_tx_types)
+      {
+        VARINT_FIELD(type) // NOTE(loki): Overwrites is_deregister
+        if (static_cast<uint16_t>(type) >= type_count) return false;
+      }
     END_SERIALIZE()
 
   public:
     transaction_prefix(){}
+
+    uint64_t get_unlock_time(size_t out_index) const
+    {
+      if (version >= version_3_per_output_unlock_times)
+      {
+        if (out_index >= output_unlock_times.size())
+        {
+          LOG_ERROR("Tried to get unlock time of a v3 transaction with missing output unlock time");
+          return unlock_time;
+        }
+        return output_unlock_times[out_index];
+      }
+      return unlock_time;
+    }
   };
 
   class transaction: public transaction_prefix

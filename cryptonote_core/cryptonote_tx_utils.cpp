@@ -213,8 +213,9 @@ namespace cryptonote
       msout->c.clear();
     }
 
-    tx.version = rct ? 2 : 1;
+    tx.version = cryptonote::transaction_prefix::version_4_tx_types; // loki tx version 4
     tx.unlock_time = unlock_time;
+    tx.type = cryptonote::transaction_prefix::type_standard;
 
     tx.extra = extra;
     crypto::public_key txkey_pub;
@@ -402,6 +403,7 @@ namespace cryptonote
     for(const tx_destination_entry& dst_entr: destinations)
     {
       CHECK_AND_ASSERT_MES(dst_entr.amount > 0 || tx.version > 1, false, "Destination with wrong amount: " << dst_entr.amount);
+      tx.output_unlock_times.push_back(unlock_time);
       crypto::public_key out_eph_public_key;
 
       hwdev.generate_output_ephemeral_keys(tx.version,sender_account_keys, txkey_pub, tx_key,
